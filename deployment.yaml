@@ -1,0 +1,36 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  labels:
+    run: locations
+  name: locations
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      run: locations
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        run: locations
+    spec:
+      containers:
+      - image: us.gcr.io/new-eden-storage-a5c23/chingy-locations:v1.0
+        imagePullPolicy: IfNotPresent
+        name: locations
+        ports:
+        - containerPort: 8000
+          protocol: TCP
+        livenessProbe:
+          httpGet:
+            path: /_status/healthz
+            port: 8000
+          initialDelaySeconds: 20
+          periodSeconds: 5

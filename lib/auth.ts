@@ -12,6 +12,9 @@ export default class Authenticator {
         let content = await response.json()
 
         if (content.error == 'invalid_grant' || content.error == 'invalid_token') {
+            let scopes = user.child('sso/scope').val();
+            user.ref.update({ expired_scopes: scopes });
+
             user.child('sso').ref.remove();
             user.child('roles').ref.remove();
             user.child('titles').ref.remove();

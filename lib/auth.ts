@@ -2,9 +2,9 @@ import { database } from 'firebase-admin';
 import { UserAgent, EveClientId, EveSecret } from '../config/config';
 
 import * as moment from 'moment';
-import { Permissions, Character } from '../models/character';
-import { Logger } from '../utils/logging';
-import { Severity } from '../models/log';
+import { Permissions, Character } from 'node-esi-stackdriver/models/Character';
+import { Logger } from 'node-esi-stackdriver/libs/logging';
+import { Severity } from 'node-esi-stackdriver/models/Log';
 
 let logger = new Logger('esi');
 

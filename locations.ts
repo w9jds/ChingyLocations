@@ -1,11 +1,16 @@
 import {database} from 'firebase-admin';
-import * as moment from 'moment';
-import { status, getCharacterOnline, getCharacterLocation, getCharacterShip, getNames } from './lib/esi';
-
 import Authentication from './lib/auth';
-import { Character } from './models/Character';
-import { Logger } from './utils/logging';
-import { Severity } from './models/log';
+import * as moment from 'moment';
+import { 
+    status, 
+    getCharacterOnline, 
+    getCharacterLocation, 
+    getCharacterShip, 
+    getNames 
+} from 'node-esi-stackdriver/libs/esi';
+import { Character } from 'node-esi-stackdriver/models/Character';
+import { Logger } from 'node-esi-stackdriver/libs/logging';
+import { Severity } from 'node-esi-stackdriver/models/Log';
 
 export default class Locations {
 
@@ -75,7 +80,7 @@ export default class Locations {
     }
 
     private logError = error => {
-        console.error(error);
+        this.logger.log(Severity.ERROR, {}, error);
         console.info("Location service encountered an error, waiting 15 seconds before running next instance.")
         this.getCharacterLocations(15000, true);
     }

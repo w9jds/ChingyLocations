@@ -7,11 +7,11 @@
     "start": "node ./build/locations.js"
   },
   "dependencies": {
-    "@google-cloud/logging": "^1.2.0",
     "firebase-admin": "^5.12.0",
     "hapi": "^17.2.0",
     "isomorphic-fetch": "^2.2.1",
-    "moment": "^2.22.0"
+    "moment": "^2.22.0",
+    "node-esi-stackdriver": "../Node-Esi-Stackdriver"
   },
   "devDependencies": {
     "@types/hapi": "^17.0.0",

@@ -4,6 +4,8 @@ import { status, getCharacterOnline, getCharacterLocation, getCharacterShip, get
 
 import Authentication from './lib/auth';
 import { Character } from './models/Character';
+import { Logger } from './utils/logging';
+import { Severity } from './models/log';
 
 export default class Locations {
 
@@ -11,7 +13,7 @@ export default class Locations {
     private auth: Authentication;
     public lastRun: moment.Moment;
 
-    constructor(private firebase: database.Database) {
+    constructor(private firebase: database.Database, private logger: Logger) {
         this.auth = new Authentication(firebase);
 
         firebase.ref(`characters`).on('child_added', this.setUser);
@@ -63,12 +65,11 @@ export default class Locations {
                 this.getCharacterLocations(6000 - duration > 0 ? 6000 - duration : 0, false);
             }
             else {
-                console.error(JSON.stringify(response));
-                console.info('ESI is offline, waiting 35 seconds to check again.');
+                this.logger.log(Severity.INFO, {}, 'ESI is offline, waiting 35 seconds to check again.');
                 this.getCharacterLocations(35000, false);
             }
         }
-        catch(error) {
+        catch (error) {
             this.logError(error);
         }
     }
@@ -109,7 +110,6 @@ export default class Locations {
 
         online = results.filter(result => {
             if (result.error) {
-                console.error(`${result.id}: received ${result.statusCode} from ${result.uri}`);
                 return false;
             }
 
@@ -145,10 +145,7 @@ export default class Locations {
                 allianceId: user.hasChild('allianceId') ? user.child('allianceId').val() : null
             };
 
-            if (result.statusCode) {
-                console.info(`${base.name}: received ${result.statusCode} from ${result.uri} ${result.body ? 'with' + result.body : ''}`);
-            }
-            else {
+            if (!result.statusCode) {
                 if (result.solar_system_id) {
                     if (ids.indexOf(result.solar_system_id) < 0) {
                         ids.push(result.solar_system_id);
@@ -195,8 +192,12 @@ export default class Locations {
             let details = current[key];
 
             if (details.id) {
-                details.location.system.name = names[details.location.system.id].name;
-                details.ship.type = names[details.ship.typeId].name;
+                if (details.location.system && details.location.system.id) {
+                    details.location.system.name = names[details.location.system.id].name;
+                }
+                if (details.ship && details.ship.typeId) {
+                    details.ship.type = names[details.ship.typeId].name;
+                }
             }
         });
 
@@ -231,7 +232,6 @@ export default class Locations {
                 return;
             }
             else {
-                console.log(error);
                 throw error;
             }
         });

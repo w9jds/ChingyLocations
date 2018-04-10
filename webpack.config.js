@@ -5,29 +5,21 @@ module.exports = {
     name: 'Server',
     context: __dirname,
     target: 'node',
+    mode: process.env.NODE_ENV ? process.env.NODE_ENV : 'development',
     devtool: 'sourcemap',
     entry: {
-        locations: ['babel-polyfill', 'isomorphic-fetch', './index.ts']
+        locations: ['isomorphic-fetch', './index.ts']
     },
     output: {
         path: path.resolve(__dirname, './build'),
         filename: '[name].js',
     },
     module: {
-        loaders: [
+        rules: [
             {
                 test: /\.tsx?$/,
-                use: [
-                    {
-                        loader: 'babel-loader',
-                        options: {
-                            presets: [
-                                ['env', {'modules': false}]
-                            ]
-                        }
-                    },
-                    'ts-loader'
-                ]
+                use: 'ts-loader',
+                exclude: /node_modules/
             }
         ]
     },

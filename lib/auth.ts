@@ -3,6 +3,10 @@ import { UserAgent, EveClientId, EveSecret } from '../config/config';
 
 import * as moment from 'moment';
 import { Permissions, Character } from '../models/character';
+import { Logger } from '../utils/logging';
+import { Severity } from '../models/log';
+
+let logger = new Logger('esi');
 
 export default class Authenticator {
 
@@ -10,6 +14,8 @@ export default class Authenticator {
 
     private async manageTokenRefreshErrors(user: database.DataSnapshot, response: Response): Promise<any> {
         let content = await response.json()
+
+        await logger.logHttp('POST', response, content);
 
         if (content.error == 'invalid_grant' || content.error == 'invalid_token') {
             let scopes = user.child('sso/scope').val();
@@ -19,7 +25,7 @@ export default class Authenticator {
             user.child('roles').ref.remove();
             user.child('titles').ref.remove();
             this.firebase.ref(`users/${user.child('accountId').val()}/errors`).set(true);
-            console.info(`Invalid user token, ${user.child('name').val()} has been removed.`);
+            logger.log(Severity.NOTICE, {}, `Invalid user token, ${user.child('name').val()} has been removed.`);
         }
 
         return {

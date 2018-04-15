@@ -11,7 +11,7 @@
     "hapi": "^17.2.0",
     "isomorphic-fetch": "^2.2.1",
     "moment": "^2.22.0",
-    "node-esi-stackdriver": "../Node-Esi-Stackdriver"
+    "node-esi-stackdriver": "^1.0.9"
   },
   "devDependencies": {
     "@types/hapi": "^17.0.0",

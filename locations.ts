@@ -1,19 +1,13 @@
-import {database} from 'firebase-admin';
-import Authentication from './lib/auth';
 import * as moment from 'moment';
-import { 
-    status, 
-    getCharacterOnline, 
-    getCharacterLocation, 
-    getCharacterShip, 
-    getNames 
-} from 'node-esi-stackdriver/libs/esi';
-import { Character } from 'node-esi-stackdriver/models/Character';
-import { Logger } from 'node-esi-stackdriver/libs/logging';
-import { Severity } from 'node-esi-stackdriver/models/Log';
+import {database} from 'firebase-admin';
+import { UserAgent } from './config/config';
+
+import Authentication from './lib/auth';
+import { Esi, Logger, Severity, Character } from 'node-esi-stackdriver';
 
 export default class Locations {
 
+    private esi: Esi;
     private users: Map<string, database.DataSnapshot> = new Map();
     private auth: Authentication;
     public lastRun: moment.Moment;
@@ -24,6 +18,8 @@ export default class Locations {
         firebase.ref(`characters`).on('child_added', this.setUser);
         firebase.ref(`characters`).on('child_changed', this.setUser);
         firebase.ref(`characters`).on('child_removed', this.removeUser);
+
+        this.esi = new Esi(UserAgent);
     }
 
     private setUser = (snapshot: database.DataSnapshot): void => {
@@ -58,7 +54,7 @@ export default class Locations {
         this.lastRun = startTime;
 
         try {
-            let response = await status();
+            let response = await this.esi.status();
 
             if (this.users.size < 1) {
                 this.getCharacterLocations(6000, false);
@@ -106,7 +102,7 @@ export default class Locations {
 
                     return true;
                 })
-                .map(character => getCharacterOnline(character))
+                .map(character => this.esi.getCharacterOnline(character))
         );
     }
 
@@ -130,8 +126,8 @@ export default class Locations {
         online.forEach(key => {
             let user: database.DataSnapshot = this.users.get(key.id) || this.users.get(key.id.toString());
 
-            promises.push(getCharacterLocation(user.val() as Character));
-            promises.push(getCharacterShip(user.val() as Character));
+            promises.push(this.esi.getCharacterLocation(user.val() as Character));
+            promises.push(this.esi.getCharacterShip(user.val() as Character));
         });
 
         return Promise.all(promises);
@@ -182,7 +178,7 @@ export default class Locations {
             }
         });
 
-        return ids.length > 0 ? getNames(ids) : null;
+        return ids.length > 0 ? this.esi.getNames(ids) : null;
     }
 
     public pushChanges = async (names, current): Promise<any> => {

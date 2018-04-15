@@ -3968,8 +3968,9 @@ node-dir@0.1.8:
   version "0.1.8"
   resolved "https://registry.yarnpkg.com/node-dir/-/node-dir-0.1.8.tgz#55fb8deb699070707fb67f91a460f0448294c77d"
 
-node-esi-stackdriver@../Node-Esi-Stackdriver:
-  version "1.0.0"
+node-esi-stackdriver@^1.0.9:
+  version "1.0.9"
+  resolved "https://registry.yarnpkg.com/node-esi-stackdriver/-/node-esi-stackdriver-1.0.9.tgz#9898b68c7400da189f5a65bdd2e30a9fb2a154da"
   dependencies:
     "@google-cloud/logging" "^1.2.0"
 

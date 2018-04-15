@@ -1,11 +1,10 @@
 import * as admin from 'firebase-admin';
 import * as moment from 'moment';
 import * as cert from './config/neweden-admin.json';
+import { Server, Request, ResponseToolkit } from 'hapi';
 
 import Locations from './locations';
-import { Server, Request, ResponseToolkit } from 'hapi';
-import { Logger } from 'node-esi-stackdriver/libs/logging';
-import { Severity } from 'node-esi-stackdriver/models/Log';
+import { Logger, Severity } from 'node-esi-stackdriver';
 
 let firebase = admin.initializeApp({
     credential: admin.credential.cert(cert as admin.ServiceAccount),

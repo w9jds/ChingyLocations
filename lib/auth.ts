@@ -1,10 +1,7 @@
+import * as moment from 'moment';
 import { database } from 'firebase-admin';
 import { UserAgent, EveClientId, EveSecret } from '../config/config';
-
-import * as moment from 'moment';
-import { Permissions, Character } from 'node-esi-stackdriver/models/Character';
-import { Logger } from 'node-esi-stackdriver/libs/logging';
-import { Severity } from 'node-esi-stackdriver/models/Log';
+import { Logger, Severity, Permissions, Character } from 'node-esi-stackdriver';
 
 let logger = new Logger('esi');
 
@@ -13,7 +10,7 @@ export default class Authenticator {
     constructor(private firebase: database.Database) { }
 
     private async manageTokenRefreshErrors(user: database.DataSnapshot, response: Response): Promise<any> {
-        let content = await response.json()
+        let content = await response.json();
 
         await logger.logHttp('POST', response, content);
 
@@ -60,7 +57,7 @@ export default class Authenticator {
                     let update: Permissions = {
                         accessToken: tokens.access_token,
                         refreshToken: tokens.refresh_token,
-                        expiresAt: moment().add((tokens.expires_in - 60), 'seconds').valueOf(),
+                        expiresAt: moment().add((tokens.expires_in - 60), 'seconds').valueOf()
                     }
 
                     character.sso.accessToken = tokens.access_token;
@@ -76,7 +73,7 @@ export default class Authenticator {
             }
         }
         catch(error) {
-            console.log(error);
+            logger.log(Severity.ERROR, {}, error);
         }
     }
 

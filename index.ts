@@ -11,7 +11,9 @@ let firebase = admin.initializeApp({
     databaseURL: 'https://new-eden-storage-a5c23.firebaseio.com'
 });
 
-const logger = new Logger('locations')
+const logger = new Logger('locations', {
+    projectId: 'new-eden-storage-a5c23'
+});
 const locations = new Locations(firebase.database(), logger);
 
 const server: Server = new Server({

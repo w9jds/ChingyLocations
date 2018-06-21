@@ -1,9 +1,13 @@
 import * as moment from 'moment';
 import { database } from 'firebase-admin';
+import fetch, {Response} from 'node-fetch';
+
 import { UserAgent, EveClientId, EveSecret } from '../config/config';
 import { Logger, Severity, Permissions, Character } from 'node-esi-stackdriver';
 
-let logger = new Logger('esi');
+let logger = new Logger('esi', {
+    projectId: 'new-eden-storage-a5c23'
+});
 
 export default class Authenticator {
 
@@ -61,6 +65,7 @@ export default class Authenticator {
                     }
 
                     character.sso.accessToken = tokens.access_token;
+                    user.child('hash').ref.update(tokens)
                     user.child('sso').ref.update(update);
                     return character;
                 }

@@ -1,9 +1,14 @@
 import * as moment from 'moment';
+import * as bluebird from 'bluebird';
 import {database} from 'firebase-admin';
 import { UserAgent } from './config/config';
 
 import Authentication from './lib/auth';
-import { Esi, Logger, Severity, Character } from 'node-esi-stackdriver';
+import { Esi, Logger, 
+    Severity, Character, 
+    Status, ErrorResponse,
+    Reference, Online, Ship, Location
+} from 'node-esi-stackdriver';
 
 export default class Locations {
 
@@ -19,7 +24,9 @@ export default class Locations {
         firebase.ref(`characters`).on('child_changed', this.setUser);
         firebase.ref(`characters`).on('child_removed', this.removeUser);
 
-        this.esi = new Esi(UserAgent);
+        this.esi = new Esi(UserAgent, {
+            projectId: 'new-eden-storage-a5c23'
+        });
     }
 
     private setUser = (snapshot: database.DataSnapshot): void => {
@@ -47,7 +54,7 @@ export default class Locations {
         let details = await this.getCharacterDetails(status, current);
         let names = await this.processDetails(details, current);
         
-        return await this.pushChanges(names, current);
+        return this.pushChanges(names, current);
     }
 
     public start = async (startTime: moment.Moment) => {
@@ -59,9 +66,9 @@ export default class Locations {
             if (this.users.size < 1) {
                 this.getCharacterLocations(6000, false);
             }
-            else if (!response.statusCode) {    
+            else if ('players' in response) {
                 await this.trigger();
-                
+
                 let duration = moment.duration(moment().diff(startTime)).asMilliseconds();
                 this.getCharacterLocations(6000 - duration > 0 ? 6000 - duration : 0, false);
             }
@@ -81,160 +88,126 @@ export default class Locations {
         this.getCharacterLocations(15000, true);
     }
 
-    public validateUsers = (): Promise<any[]> => {
-        let validation = [];
+    public validateUsers = (): bluebird<any[]> => {
+        return bluebird.map(this.users, user => {
+            return this.auth.validate(user[1]);
+        });
+    }
 
-        this.users.forEach(user => {
-             validation.push(this.auth.validate(user));
+    public getCharacterStatuses = (characters: Character[]): bluebird<any[]> => {
+        const filter = characters.filter((character: Character) => {
+            if (!character || !character.id) return false;
+            if (!character.sso) return false;
+            if (character.sso.scope.indexOf('read_location') < 0) return false;
+            if (character.sso.scope.indexOf('read_ship_type') < 0) return false;
+
+            return true;
         });
 
-        return Promise.all(validation);
+        return bluebird.map(filter, character => {
+            return this.esi.getCharacterOnline(character)
+        });
     }
 
-    public getCharacterStatuses = (characters): Promise<any[]> => {
-        return Promise.all(
-            characters
-                .filter((character: Character) => {
-                    if (!character || !character.id) return false;
-                    if (!character.sso) return false;
-                    if (character.sso.scope.indexOf('read_location') < 0) return false;
-                    if (character.sso.scope.indexOf('read_ship_type') < 0) return false;
-
-                    return true;
-                })
-                .map(character => this.esi.getCharacterOnline(character))
-        );
-    }
-
-    public getCharacterDetails = (results, current, online = []): Promise<any[]> => {
-        let promises = [];
-
-        online = results.filter(result => {
-            if (result.error) {
+    public getCharacterDetails = (results, current): bluebird<any[]> => {
+        let online: Online[] = results.filter((result: Online | ErrorResponse) => {
+            if ('error' in result) {
                 return false;
             }
 
-            if (result.online && result.online === true) {
+            if (result.online === true) {
                 return true;
             }
             else {
-                current[result.id] = {};
+                current[result.id] = false;
                 return false;
             }
         });
 
-        online.forEach(key => {
-            let user: database.DataSnapshot = this.users.get(key.id) || this.users.get(key.id.toString());
+        return bluebird.map(online, (status: Online) => {
+            const user: database.DataSnapshot = this.users.get(status.id.toString());
 
-            promises.push(this.esi.getCharacterLocation(user.val() as Character));
-            promises.push(this.esi.getCharacterShip(user.val() as Character));
-        });
-
-        return Promise.all(promises);
+            return Promise.all([
+                this.esi.getCharacterLocation(user.val() as Character),
+                this.esi.getCharacterShip(user.val() as Character)
+            ]);
+        })
     }
 
-    public processDetails = (results, current): Promise<any[]> => {
+    public processDetails = (results: (Location | Ship | ErrorResponse)[], current): Promise<Reference[] | ErrorResponse> => {
         let ids = [];
 
-        results.forEach(result => {
-            let user: database.DataSnapshot = this.users.get(result.id) || this.users.get(result.id.toString());
+        for (let result of results) {
+            let characterId: number = result[0].id || result[1].id || null;
+            if (characterId) {
+                let user: database.DataSnapshot = this.users.get(characterId.toString());
 
-            let base = current[result.id] || {
-                id: result.id,
-                name: user.child('name').val(),
-                corpId: user.child('corpId').val(),
-                allianceId: user.hasChild('allianceId') ? user.child('allianceId').val() : null
-            };
+                let base = {
+                    id: user.key,
+                    name: user.child('name').val(),
+                    corpId: user.child('corpId').val(),
+                    allianceId: user.hasChild('allianceId') ? user.child('allianceId').val() : null
+                };
+                let location: Location | ErrorResponse = result[0];
+                let ship: Ship | ErrorResponse = result[1];
 
-            if (!result.statusCode) {
-                if (result.solar_system_id) {
-                    if (ids.indexOf(result.solar_system_id) < 0) {
-                        ids.push(result.solar_system_id);
+                if (!('error' in location)) {
+                    if (ids.indexOf(location.solar_system_id) < 0) {
+                        ids.push(location.solar_system_id);
                     }
 
-                    current[result.id] = {
-                        ...base,
-                        location: {
-                            system: {
-                                id: result.solar_system_id
-                            }
+                    base['location'] = {
+                        system: {
+                            id: location.solar_system_id
                         }
                     }
                 }
-                if (result.ship_type_id) {
-                    if (ids.indexOf(result.ship_type_id) < 0) {
-                        ids.push(result.ship_type_id);
+    
+                if (!('error' in ship)) {
+                    if (ids.indexOf(ship.ship_type_id) < 0) {
+                        ids.push(ship.ship_type_id);
                     }
 
-                    current[result.id] = {
-                        ...base,
-                        ship: {
-                            typeId: result.ship_type_id,
-                            name: result.ship_name,
-                            itemId: result.ship_item_id
-                        }
-                    }
+                    base['ship'] = {
+                        typeId: ship.ship_type_id,
+                        name: ship.ship_name,
+                        itemId: ship.ship_item_id
+                    };
                 }
+
+                current[user.key] = base;
             }
-        });
+        };
 
         return ids.length > 0 ? this.esi.getNames(ids) : null;
     }
 
     public pushChanges = async (names, current): Promise<any> => {
-        if (!names || names.error) return;
+        if (!names || 'error' in names) {
+            return;
+        }
         
         names = names.reduce((end, item) => {
             end[item.id] = item;
             return end;
         }, {});
 
-        Object.keys(current).forEach(key => {
+        return bluebird.map(Object.keys(current), (key: string) => {
             let details = current[key];
 
-            if (details.id) {
-                if (details.location.system && details.location.system.id) {
-                    details.location.system.name = names[details.location.system.id].name;
-                }
-                if (details.ship && details.ship.typeId) {
-                    details.ship.type = names[details.ship.typeId].name;
-                }
-            }
-        });
-
-        return this.firebase.ref('locations').transaction(snapshot => {
-            if (!snapshot) {
-                snapshot = {};
+            if (details === false || !details.location || !details.ship) {
+                return this.firebase.ref(`locations/${key}`).remove();
             }
 
-            Object.keys(current).forEach(userId => {
-                if (snapshot[userId]) {
-                    let old = snapshot[userId],
-                        updated = current[userId];
-
-                    if (!updated.id) {
-                        delete snapshot[userId];
-                    }
-                    else if (!old.location.system || old.location.system.id != updated.location.system.id) {
-                        snapshot[userId].location = updated.location;
-                    }
-                    else if (!old.ship || old.ship.typeId != updated.ship.typeId || old.ship.name != updated.ship.name) {
-                        snapshot[userId].ship = updated.ship;
-                    }
-                }
-                else if (current[userId].id) {
-                    snapshot[userId] = current[userId];
-                }
-            });
-
-            return snapshot;
-        }, (error, committed) => {
-            if (committed) {
-                return;
+            if (details.location.system && details.location.system.id) {
+                details.location.system.name = names[details.location.system.id].name;
             }
-            else {
-                throw error;
+
+            if (details.ship && details.ship.typeId) {
+                details.ship.type = names[details.ship.typeId].name;
             }
+
+            return this.firebase.ref(`locations/${key}`).set(details);
         });
     }
 }

@@ -8,7 +8,7 @@ module.exports = {
     mode: process.env.NODE_ENV ? process.env.NODE_ENV : 'development',
     devtool: 'sourcemap',
     entry: {
-        locations: ['isomorphic-fetch', './index.ts']
+        locations: ['./index.ts']
     },
     output: {
         path: path.resolve(__dirname, './build'),

@@ -23,6 +23,7 @@ export default class Authenticator {
             user.ref.update({ expired_scopes: scopes });
 
             user.child('sso').ref.remove();
+            user.child('hash').ref.remove();
             user.child('roles').ref.remove();
             user.child('titles').ref.remove();
             this.firebase.ref(`users/${user.child('accountId').val()}/errors`).set(true);
@@ -44,6 +45,7 @@ export default class Authenticator {
         if (!character.sso) {
             return {
                 error: true,
+                content: 'character not logged in',
                 user: {
                     id: user.key,
                     name: user.child('name').val()
@@ -65,7 +67,7 @@ export default class Authenticator {
                     }
 
                     character.sso.accessToken = tokens.access_token;
-                    user.child('hash').ref.update(tokens)
+                    // user.child('hash').ref.update(tokens);
                     user.child('sso').ref.update(update);
                     return character;
                 }

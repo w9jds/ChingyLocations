@@ -5,8 +5,7 @@ import { UserAgent } from './config/config';
 
 import Authentication from './lib/auth';
 import { Esi, Logger, 
-    Severity, Character, 
-    Status, ErrorResponse,
+    Severity, Character, ErrorResponse,
     Reference, Online, Ship, Location
 } from 'node-esi-stackdriver';
 
@@ -30,6 +29,18 @@ export default class Locations {
     }
 
     private setUser = (snapshot: database.DataSnapshot): void => {
+        let character = snapshot.val();
+
+        if ('accessToken' in character) {
+            snapshot.child('accessToken').ref.remove();
+        }
+        if ('expiresAt' in character) {
+            snapshot.child('expiresAt').ref.remove();
+        }
+        if ('refreshToken' in character) {
+            snapshot.child('refreshToken').ref.remove();
+        }
+
         this.users.set(snapshot.key, snapshot);
     }
 
@@ -100,7 +111,6 @@ export default class Locations {
             if (!character.sso) return false;
             if (character.sso.scope.indexOf('read_location') < 0) return false;
             if (character.sso.scope.indexOf('read_ship_type') < 0) return false;
-
             return true;
         });
 
@@ -112,6 +122,7 @@ export default class Locations {
     public getCharacterDetails = (results, current): bluebird<any[]> => {
         let online: Online[] = results.filter((result: Online | ErrorResponse) => {
             if ('error' in result) {
+                this.logger.log(Severity.ERROR, {}, result);
                 return false;
             }
 
@@ -141,17 +152,20 @@ export default class Locations {
             let characterId: number = result[0].id || result[1].id || null;
             if (characterId) {
                 let user: database.DataSnapshot = this.users.get(characterId.toString());
-
+                let location: Location | ErrorResponse = result[0];
+                let ship: Ship | ErrorResponse = result[1];
                 let base = {
                     id: user.key,
                     name: user.child('name').val(),
                     corpId: user.child('corpId').val(),
                     allianceId: user.hasChild('allianceId') ? user.child('allianceId').val() : null
                 };
-                let location: Location | ErrorResponse = result[0];
-                let ship: Ship | ErrorResponse = result[1];
 
-                if (!('error' in location)) {
+                if ('error' in location) {
+                    console.log(JSON.stringify(location));
+                    this.logger.log(Severity.ERROR, {}, location);
+                }
+                else {
                     if (ids.indexOf(location.solar_system_id) < 0) {
                         ids.push(location.solar_system_id);
                     }
@@ -162,8 +176,12 @@ export default class Locations {
                         }
                     }
                 }
-    
-                if (!('error' in ship)) {
+
+                if ('error' in ship) {
+                    console.log(JSON.stringify(ship));
+                    this.logger.log(Severity.ERROR, {}, ship);
+                }
+                else {
                     if (ids.indexOf(ship.ship_type_id) < 0) {
                         ids.push(ship.ship_type_id);
                     }

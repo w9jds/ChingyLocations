@@ -33,7 +33,7 @@ const createHealthRoutes = () => {
     server.route({
         method: 'GET',
         path: '/_status/healthz',
-        handler: (request: Request, h: ResponseToolkit) => {
+        handler: (_: Request, h: ResponseToolkit) => {
             if (moment().subtract(15, 'seconds').isAfter(locations.lastRun)) {
                 logger.log(Severity.INFO, {}, `Restarting Locations, Locations last ran: ${locations.lastRun.format('hh:mm:ss')}`);
                 locations.start(moment());

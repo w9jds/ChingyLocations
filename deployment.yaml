@@ -4,9 +4,8 @@ metadata:
   labels:
     run: locations
   name: locations
-  namespace: default
+  namespace: services
 spec:
-  replicas: 1
   selector:
     matchLabels:
       run: locations
@@ -14,17 +13,14 @@ spec:
     rollingUpdate:
       maxSurge: 1
       maxUnavailable: 1
-    type: RollingUpdate
   template:
     metadata:
-      creationTimestamp: null
       labels:
         run: locations
     spec:
       containers:
-      - image: us.gcr.io/new-eden-storage-a5c23/chingy-locations:v1.7
-        imagePullPolicy: IfNotPresent
-        name: locations
+      - name: locations
+        image: us.gcr.io/new-eden-storage-a5c23/chingy-locations:v1.14
         ports:
         - containerPort: 8000
           protocol: TCP
@@ -33,4 +29,4 @@ spec:
             path: /_status/healthz
             port: 8000
           initialDelaySeconds: 20
-          periodSeconds: 5
+          periodSeconds: 10

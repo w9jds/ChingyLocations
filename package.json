@@ -1,29 +1,29 @@
 {
   "name": "location-service",
-  "version": "1.0.0",
+  "version": "1.14.0",
   "scripts": {
-    "build": "webpack --verbose --colors",
+    "build": "tsc",
     "build-prod": "npm run build && docker build -t chingy-locations .",
     "start": "node ./build/locations.js"
   },
   "dependencies": {
-    "bluebird": "^3.5.1",
-    "firebase-admin": "^5.12.1",
-    "hapi": "^17.5.2",
-    "moment": "^2.22.0",
-    "node-esi-stackdriver": "^1.0.27",
-    "node-fetch": "^2.1.2"
+    "bluebird": "^3.5.3",
+    "firebase-admin": "^7.0.0",
+    "hapi": "^18.1.0",
+    "moment": "^2.24.0",
+    "node-esi-stackdriver": "^1.0.28",
+    "node-fetch": "^2.3.0",
+    "tslib": "^1.9.3"
   },
   "devDependencies": {
-    "@types/bluebird": "^3.5.20",
-    "@types/hapi": "^17.0.12",
-    "@types/node": "^9.6.21",
-    "@types/node-fetch": "^2.1.1",
-    "ts-loader": "^4.4.2",
-    "tslib": "^1.9.3",
-    "typescript": "^2.9.2",
-    "webpack": "^4.16.1",
-    "webpack-cli": "^3.0.8",
+    "@types/bluebird": "^3.5.25",
+    "@types/hapi": "^18.0.1",
+    "@types/node": "^11.9.5",
+    "@types/node-fetch": "^2.1.6",
+    "ts-loader": "^5.3.3",
+    "typescript": "^3.3.3333",
+    "webpack": "^4.29.5",
+    "webpack-cli": "^3.2.3",
     "webpack-node-externals": "^1.7.2"
   }
 }

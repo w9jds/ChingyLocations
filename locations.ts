@@ -89,14 +89,10 @@ export default class Locations {
             }
         }
         catch (error) {
-            this.logError(error);
+            this.logger.log(Severity.ERROR, {}, error);
+            console.info("Location service encountered an error, waiting 15 seconds before running next instance.")
+            this.getCharacterLocations(15000, true);
         }
-    }
-
-    private logError = error => {
-        this.logger.log(Severity.ERROR, {}, error);
-        console.info("Location service encountered an error, waiting 15 seconds before running next instance.")
-        this.getCharacterLocations(15000, true);
     }
 
     public validateUsers = (): bluebird<any[]> => {
@@ -120,9 +116,8 @@ export default class Locations {
     }
 
     public getCharacterDetails = (results, current): bluebird<any[]> => {
-        let online: Online[] = results.filter((result: Online | ErrorResponse) => {
+        const online: Online[] = results.filter((result: Online | ErrorResponse) => {
             if ('error' in result) {
-                this.logger.log(Severity.ERROR, {}, result);
                 return false;
             }
 
@@ -151,10 +146,10 @@ export default class Locations {
         for (let result of results) {
             let characterId: number = result[0].id || result[1].id || null;
             if (characterId) {
-                let user: database.DataSnapshot = this.users.get(characterId.toString());
-                let location: Location | ErrorResponse = result[0];
-                let ship: Ship | ErrorResponse = result[1];
-                let base = {
+                const user: database.DataSnapshot = this.users.get(characterId.toString());
+                const location: Location | ErrorResponse = result[0];
+                const ship: Ship | ErrorResponse = result[1];
+                const base = {
                     id: user.key,
                     name: user.child('name').val(),
                     corpId: user.child('corpId').val(),
@@ -163,7 +158,7 @@ export default class Locations {
 
                 if ('error' in location) {
                     console.log(JSON.stringify(location));
-                    this.logger.log(Severity.ERROR, {}, location);
+//                  this.logger.log(Severity.ERROR, {}, location);
                 }
                 else {
                     if (ids.indexOf(location.solar_system_id) < 0) {
@@ -179,7 +174,7 @@ export default class Locations {
 
                 if ('error' in ship) {
                     console.log(JSON.stringify(ship));
-                    this.logger.log(Severity.ERROR, {}, ship);
+//                  this.logger.log(Severity.ERROR, {}, ship);
                 }
                 else {
                     if (ids.indexOf(ship.ship_type_id) < 0) {

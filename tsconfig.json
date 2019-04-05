@@ -4,11 +4,12 @@
     "importHelpers": true,
     "target": "es6",
     "module": "commonjs",
-    "outDir": "./dist",
+    "outDir": "./out",
     "moduleResolution": "node",
     "sourceMap": true,
     "removeComments": true,
     "preserveConstEnums": true,
+    "resolveJsonModule": true,
     "strictNullChecks": false
   }
 }

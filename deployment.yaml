@@ -20,13 +20,7 @@ spec:
     spec:
       containers:
       - name: locations
-        image: us.gcr.io/new-eden-storage-a5c23/chingy-locations:v1.14
+        image: us.gcr.io/new-eden-storage-a5c23/chingy-locations:v1.16
         ports:
         - containerPort: 8000
           protocol: TCP
-        livenessProbe:
-          httpGet:
-            path: /_status/healthz
-            port: 8000
-          initialDelaySeconds: 20
-          periodSeconds: 10

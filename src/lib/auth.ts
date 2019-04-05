@@ -2,23 +2,35 @@ import * as moment from 'moment';
 import { database } from 'firebase-admin';
 import fetch, {Response} from 'node-fetch';
 
-import { UserAgent, EveClientId, EveSecret } from '../config/config';
+import { UserAgent, EveClientId, EveSecret } from '../config/constants';
 import { Logger, Severity, Permissions, Character } from 'node-esi-stackdriver';
 
-let logger = new Logger('esi', {
-    projectId: 'new-eden-storage-a5c23'
-});
+const logger = new Logger('esi', { projectId: 'new-eden-storage-a5c23' });
 
 export default class Authenticator {
 
     constructor(private firebase: database.Database) { }
 
     private async manageTokenRefreshErrors(user: database.DataSnapshot, response: Response): Promise<any> {
-        let content = await response.json();
+        let content: any;
+        let payload = {
+            error: true,
+            user: {
+                id: user.key,
+                name: user.child('name').val()
+            }
+        };
 
-        await logger.logHttp('POST', response, content);
-
-        if (content.error == 'invalid_grant' || content.error == 'invalid_token') {
+        try {
+            content = await response.json();
+            payload['response'] = content;
+            await logger.logHttp('POST', response, content);
+        }
+        catch (error) {
+            payload['response'] = error;
+        }
+        
+        if (content && content.error && (content.error == 'invalid_grant' || content.error == 'invalid_token')) {
             let scopes = user.child('sso/scope').val();
             user.ref.update({ expired_scopes: scopes });
 
@@ -26,18 +38,12 @@ export default class Authenticator {
             user.child('hash').ref.remove();
             user.child('roles').ref.remove();
             user.child('titles').ref.remove();
+
             this.firebase.ref(`users/${user.child('accountId').val()}/errors`).set(true);
             logger.log(Severity.NOTICE, {}, `Invalid user token, ${user.child('name').val()} has been removed.`);
         }
 
-        return {
-            error: true,
-            response: content,
-            user: {
-                id: user.key,
-                name: user.child('name').val()
-            }
-        };
+        return payload;
     }
 
     public validate = async (user: database.DataSnapshot): Promise<any> => {
@@ -67,17 +73,13 @@ export default class Authenticator {
                     }
 
                     character.sso.accessToken = tokens.access_token;
-                    // user.child('hash').ref.update(tokens);
+                    user.child('hash').ref.update(tokens);
                     user.child('sso').ref.update(update);
                     return character;
                 }
-                else {
-                    return this.manageTokenRefreshErrors(user, response);
-                }
+                return this.manageTokenRefreshErrors(user, response);
             }
-            else {
-                return character;
-            }
+            return character;
         }
         catch(error) {
             logger.log(Severity.ERROR, {}, error);
@@ -88,7 +90,8 @@ export default class Authenticator {
         return fetch('https://login.eveonline.com/oauth/token', {
             method: 'POST',
             headers: {
-                'Authorization': 'Basic ' + new Buffer(process.env.EVE_CLIENT_ID + ':' + process.env.EVE_SECRET).toString('base64'),
+                'User-Agent': UserAgent,
+                'Authorization': 'Basic ' + new Buffer(EveClientId + ':' + EveSecret).toString('base64'),
                 'Content-Type': 'application/x-www-form-urlencoded',
                 'Host': 'login.eveonline.com'
             },

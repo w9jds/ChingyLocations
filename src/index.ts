@@ -1,35 +1,25 @@
 import * as admin from 'firebase-admin';
 import * as moment from 'moment';
-import * as cert from './config/neweden-admin.json';
+import * as cert from './config/new-eden-admin.json';
 import { Server, Request, ResponseToolkit } from 'hapi';
 
 import Locations from './locations';
 import { Logger, Severity } from 'node-esi-stackdriver';
 
-let firebase = admin.initializeApp({
+const logger = new Logger('locations', { projectId: 'new-eden-storage-a5c23' });
+const firebase = admin.initializeApp({
     credential: admin.credential.cert(cert as admin.ServiceAccount),
     databaseURL: 'https://new-eden-storage-a5c23.firebaseio.com'
 });
 
-const logger = new Logger('locations', {
-    projectId: 'new-eden-storage-a5c23'
-});
-const locations = new Locations(firebase.database(), logger);
 
+const locations = new Locations(firebase.database(), logger);
 const server: Server = new Server({
     port: process.env.PORT || 8000,
     host: '0.0.0.0'
 });
 
 async function init(): Promise<Server> {
-    createHealthRoutes();
-
-    await server.start();
-
-    return server;
-}
-
-const createHealthRoutes = () => {
     server.route({
         method: 'GET',
         path: '/_status/healthz',
@@ -38,10 +28,14 @@ const createHealthRoutes = () => {
                 logger.log(Severity.INFO, {}, `Restarting Locations, Locations last ran: ${locations.lastRun.format('hh:mm:ss')}`);
                 locations.start(moment());
             }
-
+    
             return h.response();
         }
     });
+
+    await server.start();
+
+    return server;
 }
 
 init().then(server => {

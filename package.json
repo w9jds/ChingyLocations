@@ -7,8 +7,8 @@
     "start": "node ./build/locations.js"
   },
   "dependencies": {
-    "bluebird": "^3.5.3",
-    "firebase-admin": "^7.0.0",
+    "bluebird": "^3.5.4",
+    "firebase-admin": "^7.2.0",
     "hapi": "^18.1.0",
     "moment": "^2.24.0",
     "node-esi-stackdriver": "^1.0.28",
@@ -16,14 +16,11 @@
     "tslib": "^1.9.3"
   },
   "devDependencies": {
-    "@types/bluebird": "^3.5.25",
+    "@types/bluebird": "^3.5.26",
     "@types/hapi": "^18.0.1",
-    "@types/node": "^11.9.5",
-    "@types/node-fetch": "^2.1.6",
-    "ts-loader": "^5.3.3",
-    "typescript": "^3.3.3333",
-    "webpack": "^4.29.5",
-    "webpack-cli": "^3.2.3",
-    "webpack-node-externals": "^1.7.2"
+    "@types/node": "^11.13.0",
+    "@types/node-fetch": "^2.3.0",
+    "typescript": "^3.4.1",
+    "webpack": "^4.29.6"
   }
 }

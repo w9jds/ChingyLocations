@@ -59,7 +59,7 @@ typings/
 
 # next.js build output
 .next
-neweden-admin.json
+new-eden-admin.json
 .vscode
 Dockerfile
-/build
+/out

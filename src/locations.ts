@@ -1,7 +1,7 @@
 import * as moment from 'moment';
 import * as bluebird from 'bluebird';
-import {database} from 'firebase-admin';
-import { UserAgent } from './config/config';
+import { database } from 'firebase-admin';
+import { UserAgent } from './config/constants';
 
 import Authentication from './lib/auth';
 import { Esi, Logger, 
@@ -17,15 +17,12 @@ export default class Locations {
     public lastRun: moment.Moment;
 
     constructor(private firebase: database.Database, private logger: Logger) {
+        this.esi = new Esi(UserAgent, { projectId: 'new-eden-storage-a5c23' });
         this.auth = new Authentication(firebase);
 
         firebase.ref(`characters`).on('child_added', this.setUser);
         firebase.ref(`characters`).on('child_changed', this.setUser);
         firebase.ref(`characters`).on('child_removed', this.removeUser);
-
-        this.esi = new Esi(UserAgent, {
-            projectId: 'new-eden-storage-a5c23'
-        });
     }
 
     private setUser = (snapshot: database.DataSnapshot): void => {
@@ -60,10 +57,10 @@ export default class Locations {
 
     private trigger = async () => {
         let current = {};
-        let users = await this.validateUsers();
-        let status = await this.getCharacterStatuses(users);
-        let details = await this.getCharacterDetails(status, current);
-        let names = await this.processDetails(details, current);
+        const users = await this.validateUsers();
+        const status = await this.getCharacterStatuses(users);
+        const details = await this.getCharacterDetails(status, current);
+        const names = await this.processDetails(details, current);
         
         return this.pushChanges(names, current);
     }
@@ -79,7 +76,6 @@ export default class Locations {
             }
             else if ('players' in response) {
                 await this.trigger();
-
                 let duration = moment.duration(moment().diff(startTime)).asMilliseconds();
                 this.getCharacterLocations(6000 - duration > 0 ? 6000 - duration : 0, false);
             }
@@ -124,10 +120,9 @@ export default class Locations {
             if (result.online === true) {
                 return true;
             }
-            else {
-                current[result.id] = false;
-                return false;
-            }
+             
+            current[result.id] = false;
+            return false;
         });
 
         return bluebird.map(online, (status: Online) => {
@@ -140,55 +135,51 @@ export default class Locations {
         })
     }
 
+
     public processDetails = (results: (Location | Ship | ErrorResponse)[], current): Promise<Reference[] | ErrorResponse> => {
         let ids = [];
 
         for (let result of results) {
-            let characterId: number = result[0].id || result[1].id || null;
+            const characterId: number = result[0].id || result[1].id || null;
             if (characterId) {
-                const user: database.DataSnapshot = this.users.get(characterId.toString());
-                const location: Location | ErrorResponse = result[0];
                 const ship: Ship | ErrorResponse = result[1];
-                const base = {
-                    id: user.key,
-                    name: user.child('name').val(),
-                    corpId: user.child('corpId').val(),
-                    allianceId: user.hasChild('allianceId') ? user.child('allianceId').val() : null
-                };
-
+                const location: Location | ErrorResponse = result[0];
+                const user: database.DataSnapshot = this.users.get(characterId.toString());
+                
                 if ('error' in location) {
                     console.log(JSON.stringify(location));
-//                  this.logger.log(Severity.ERROR, {}, location);
+                    continue;
                 }
-                else {
-                    if (ids.indexOf(location.solar_system_id) < 0) {
-                        ids.push(location.solar_system_id);
-                    }
+                
+                if ('error' in ship) {
+                    console.log(JSON.stringify(ship));
+                    continue;
+                }
 
-                    base['location'] = {
+                if (ids.indexOf(location.solar_system_id) < 0) {
+                    ids.push(location.solar_system_id);
+                }
+
+                if (ids.indexOf(ship.ship_type_id) < 0) {
+                    ids.push(ship.ship_type_id);
+                }
+
+                current[user.key] = {
+                    id: Number(user.key),
+                    name: user.child('name').val(),
+                    corpId: user.child('corpId').val(),
+                    allianceId: user.hasChild('allianceId') ? user.child('allianceId').val() : null,
+                    ship: {
+                        typeId: ship.ship_type_id,
+                        name: ship.ship_name,
+                        itemId: ship.ship_item_id
+                    },
+                    location: {
                         system: {
                             id: location.solar_system_id
                         }
                     }
-                }
-
-                if ('error' in ship) {
-                    console.log(JSON.stringify(ship));
-//                  this.logger.log(Severity.ERROR, {}, ship);
-                }
-                else {
-                    if (ids.indexOf(ship.ship_type_id) < 0) {
-                        ids.push(ship.ship_type_id);
-                    }
-
-                    base['ship'] = {
-                        typeId: ship.ship_type_id,
-                        name: ship.ship_name,
-                        itemId: ship.ship_item_id
-                    };
-                }
-
-                current[user.key] = base;
+                };
             }
         };
 
@@ -206,7 +197,7 @@ export default class Locations {
         }, {});
 
         return bluebird.map(Object.keys(current), (key: string) => {
-            let details = current[key];
+            let details: CharacterLocation | false = current[key];
 
             if (details === false || !details.location || !details.ship) {
                 return this.firebase.ref(`locations/${key}`).remove();

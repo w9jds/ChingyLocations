@@ -14,7 +14,6 @@ export default class Locations {
     private esi: Esi;
     private users: Map<string, database.DataSnapshot> = new Map();
     private auth: Authentication;
-    public lastRun: moment.Moment;
 
     constructor(private firebase: database.Database, private logger: Logger) {
         this.esi = new Esi(UserAgent, { projectId: 'new-eden-storage-a5c23' });
@@ -45,16 +44,6 @@ export default class Locations {
         this.users.delete(snapshot.key);
     }
 
-    private getCharacterLocations = (delay: number, error: boolean) => {
-        if (error === false) {
-            this.lastRun = moment();
-        }
-    
-        setTimeout(() => {
-            this.start(moment());
-        }, delay);
-    }
-
     private trigger = async () => {
         let current = {};
         const users = await this.validateUsers();
@@ -65,38 +54,36 @@ export default class Locations {
         return this.pushChanges(names, current);
     }
 
-    public start = async (startTime: moment.Moment) => {
-        this.lastRun = startTime;
+    private sleep = (ms: number): Promise<void> => new Promise(resolve => {
+        setTimeout(resolve, ms)
+    })
 
-        try {
+    public start = async () => {
+        for (;;) {
             let response = await this.esi.status();
 
-            if (this.users.size < 1) {
-                this.getCharacterLocations(6000, false);
+            try {
+                if (this.users.size < 1) {
+                    await this.sleep(6000);
+                }
+                else if ('players' in response) {
+                    await this.trigger();
+                }
+                else {
+                    this.logger.log(Severity.INFO, {}, 'ESI is offline, waiting 35 seconds to check again');
+                    await this.sleep(35000);
+                }
             }
-            else if ('players' in response) {
-                await this.trigger();
-                let duration = moment.duration(moment().diff(startTime)).asMilliseconds();
-                this.getCharacterLocations(6000 - duration > 0 ? 6000 - duration : 0, false);
+            catch (error) {
+                this.logger.log(Severity.ERROR, {}, error);
+                console.info("Location service encountered an error, waiting 15 seconds before running next instance")
+                await this.sleep(15000);
             }
-            else {
-                this.logger.log(Severity.INFO, {}, 'ESI is offline, waiting 35 seconds to check again.');
-                this.getCharacterLocations(35000, false);
-            }
-        }
-        catch (error) {
-            this.logger.log(Severity.ERROR, {}, error);
-            console.info("Location service encountered an error, waiting 15 seconds before running next instance.")
-            this.getCharacterLocations(15000, true);
         }
     }
 
-    public validateUsers = (): bluebird<any[]> => {
-        return bluebird.map(this.users, user => {
-            return this.auth.validate(user[1]);
-        });
-    }
-
+    public validateUsers = (): bluebird<any[]> => bluebird.map(this.users, user => this.auth.validate(user[1]))
+    
     public getCharacterStatuses = (characters: Character[]): bluebird<any[]> => {
         const filter = characters.filter((character: Character) => {
             if (!character || !character.id) return false;

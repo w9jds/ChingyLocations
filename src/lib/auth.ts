@@ -4,6 +4,7 @@ import fetch, {Response} from 'node-fetch';
 
 import { UserAgent, EveClientId, EveSecret } from '../config/constants';
 import { Logger, Severity, Permissions, Character } from 'node-esi-stackdriver';
+import { basename } from 'path';
 
 const logger = new Logger('esi', { projectId: 'new-eden-storage-a5c23' });
 
@@ -48,15 +49,17 @@ export default class Authenticator {
 
     public validate = async (user: database.DataSnapshot): Promise<any> => {
         let character: Character = user.val();
+        const base: UserError = {
+            error: true,
+            user: {
+                id: user.key,
+                name: user.child('name').val()
+            }
+        };
+
         if (!character.sso) {
-            return {
-                error: true,
-                content: 'character not logged in',
-                user: {
-                    id: user.key,
-                    name: user.child('name').val()
-                }
-            };
+            base.content = 'character not logged in';
+            return base;
         }
 
         try {
@@ -82,12 +85,13 @@ export default class Authenticator {
             return character;
         }
         catch(error) {
-            logger.log(Severity.ERROR, {}, error);
+            base.error = error;
+            return base;
         }
     }
 
-    private refresh = (refreshToken: string): Promise<any> => {
-        return fetch('https://login.eveonline.com/oauth/token', {
+    private refresh = (refreshToken: string): Promise<any> => 
+        fetch('https://login.eveonline.com/oauth/token', {
             method: 'POST',
             headers: {
                 'User-Agent': UserAgent,
@@ -97,5 +101,4 @@ export default class Authenticator {
             },
             body: `grant_type=refresh_token&refresh_token=${refreshToken}`
         });
-    }
 }

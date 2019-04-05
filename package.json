@@ -9,7 +9,6 @@
   "dependencies": {
     "bluebird": "^3.5.4",
     "firebase-admin": "^7.2.0",
-    "hapi": "^18.1.0",
     "moment": "^2.24.0",
     "node-esi-stackdriver": "^1.0.28",
     "node-fetch": "^2.3.0",
@@ -17,7 +16,6 @@
   },
   "devDependencies": {
     "@types/bluebird": "^3.5.26",
-    "@types/hapi": "^18.0.1",
     "@types/node": "^11.13.0",
     "@types/node-fetch": "^2.3.0",
     "typescript": "^3.4.1",

@@ -1,4 +1,3 @@
-import * as moment from 'moment';
 import * as bluebird from 'bluebird';
 import { database } from 'firebase-admin';
 import { UserAgent } from './config/constants';

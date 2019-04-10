@@ -3,10 +3,13 @@ import { database } from 'firebase-admin';
 import fetch, {Response} from 'node-fetch';
 
 import { UserAgent, EveClientId, EveSecret } from '../config/constants';
-import { Logger, Severity, Permissions, Character } from 'node-esi-stackdriver';
-import { basename } from 'path';
+import { Logger, Severity, Permissions, Character, Esi } from 'node-esi-stackdriver';
 
 const logger = new Logger('esi', { projectId: 'new-eden-storage-a5c23' });
+const headers = {
+    'Accept': 'application/json',
+    'User-Agent' : UserAgent
+};
 
 export default class Authenticator {
 
@@ -36,7 +39,6 @@ export default class Authenticator {
             user.ref.update({ expired_scopes: scopes });
 
             user.child('sso').ref.remove();
-            user.child('hash').ref.remove();
             user.child('roles').ref.remove();
             user.child('titles').ref.remove();
 
@@ -63,12 +65,13 @@ export default class Authenticator {
         }
 
         try {
-            let expiresAt = moment(character.sso.expiresAt);
+            const expiresAt = moment(character.sso.expiresAt);
             if (moment().isAfter(expiresAt)) {
-                let response = await this.refresh(character.sso.refreshToken);
+                const response = await this.refresh(character.sso.refreshToken);
 
                 if (response.status == 200) {
-                    let tokens = await response.json();
+                    const tokens = await response.json();
+                    const verify = await this.verify(tokens.token_type, tokens.access_token);
                     let update: Permissions = {
                         accessToken: tokens.access_token,
                         refreshToken: tokens.refresh_token,
@@ -76,8 +79,13 @@ export default class Authenticator {
                     }
 
                     character.sso.accessToken = tokens.access_token;
-                    user.child('hash').ref.update(tokens);
-                    user.child('sso').ref.update(update);
+                    Promise.all([
+                        user.child('sso').ref.update(update),
+                        user.ref.update({
+                            name: verify.CharacterName,
+                            hash: verify.CharacterOwnerHash
+                        })
+                    ]);
                     return character;
                 }
                 return this.manageTokenRefreshErrors(user, response);
@@ -87,6 +95,24 @@ export default class Authenticator {
         catch(error) {
             base.error = error;
             return base;
+        }
+    }
+
+    private verify = async (type: string, token: string): Promise<any> => {
+        const response: Response = await fetch('https://login.eveonline.com/oauth/verify/', {
+            method: 'GET',
+            headers: {
+                'Authorization': type + ' ' + token,
+                'Host': 'login.eveonline.com',
+                ...headers
+            }
+        });
+
+        if (response.status === 200) {
+            return response.json();
+        }
+        else {
+            throw new Error(`Invalid Login: ${response.status} ${response.body}`);
         }
     }
 

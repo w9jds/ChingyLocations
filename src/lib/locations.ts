@@ -1,29 +1,26 @@
 import * as bluebird from 'bluebird';
 import { database } from 'firebase-admin';
-import { UserAgent } from './config/constants';
 
-import Authentication from './lib/auth';
-import { Esi, Logger, 
-    Severity, Character, ErrorResponse,
-    Reference, Online, Ship, Location
-} from 'node-esi-stackdriver';
+import Authentication from './auth';
+import { Severity, Character, ErrorResponse, Reference, Online, Ship, Location } from 'node-esi-stackdriver';
+import { CharacterLocation } from '../models/Locations';
 
 export default class Locations {
 
-    private esi: Esi;
+    private lastRun: number;
+    private database = firebase.database();
     private users: Map<string, database.DataSnapshot> = new Map();
-    private auth: Authentication;
+    private auth = new Authentication();
 
-    constructor(private firebase: database.Database, private logger: Logger) {
-        this.esi = new Esi(UserAgent, { projectId: 'new-eden-storage-a5c23' });
-        this.auth = new Authentication(firebase);
-
-        firebase.ref(`characters`).on('child_added', this.setUser);
-        firebase.ref(`characters`).on('child_changed', this.setUser);
-        firebase.ref(`characters`).on('child_removed', this.removeUser);
+    constructor() {
+        this.database.ref(`characters`).on('child_added', this.setUser);
+        this.database.ref(`characters`).on('child_changed', this.setUser);
+        this.database.ref(`characters`).on('child_removed', this.removeUser);
     }
 
-    private setUser = (snapshot: database.DataSnapshot): void => {
+    public getLastRun = (): number => this.lastRun;
+
+    private setUser = (snapshot: database.DataSnapshot) => {
         let character = snapshot.val();
 
         if ('accessToken' in character) {
@@ -39,7 +36,7 @@ export default class Locations {
         this.users.set(snapshot.key, snapshot);
     }
 
-    private removeUser = (snapshot: database.DataSnapshot): void => {
+    private removeUser = (snapshot: database.DataSnapshot) => {
         this.users.delete(snapshot.key);
     }
 
@@ -59,9 +56,10 @@ export default class Locations {
 
     public start = async () => {
         for (;;) {
-            let response = await this.esi.status();
-
             try {
+                this.lastRun = Date.now();
+                let response = await esi.status();
+
                 if (this.users.size < 1) {
                     await this.sleep(6000);
                 }
@@ -69,21 +67,21 @@ export default class Locations {
                     await this.trigger();
                 }
                 else {
-                    this.logger.log(Severity.INFO, {}, 'ESI is offline, waiting 35 seconds to check again');
+                    logger.log(Severity.INFO, {}, 'ESI is offline, waiting 35 seconds to check again');
                     await this.sleep(35000);
                 }
             }
             catch (error) {
-                this.logger.log(Severity.ERROR, {}, error);
+                logger.log(Severity.ERROR, {}, error);
                 console.info("Location service encountered an error, waiting 15 seconds before running next instance")
                 await this.sleep(15000);
             }
         }
     }
 
-    public validateUsers = (): bluebird<any[]> => bluebird.map(this.users, user => this.auth.validate(user[1]))
+    private validateUsers = (): bluebird<any[]> => bluebird.map(this.users, user => this.auth.validate(user[1]))
     
-    public getCharacterStatuses = (characters: Character[]): bluebird<any[]> => {
+    private getCharacterStatuses = (characters: Character[]): bluebird<any[]> => {
         const filter = characters.filter((character: Character) => {
             if (!character || !character.id) return false;
             if (!character.sso) return false;
@@ -93,11 +91,11 @@ export default class Locations {
         });
 
         return bluebird.map(filter, character => {
-            return this.esi.getCharacterOnline(character)
+            return esi.getCharacterOnline(character)
         });
     }
 
-    public getCharacterDetails = (results, current): bluebird<any[]> => {
+    private getCharacterDetails = (results, current): bluebird<any[]> => {
         const online: Online[] = results.filter((result: Online | ErrorResponse) => {
             if ('error' in result) {
                 return false;
@@ -115,14 +113,14 @@ export default class Locations {
             const user: database.DataSnapshot = this.users.get(status.id.toString());
 
             return Promise.all([
-                this.esi.getCharacterLocation(user.val() as Character),
-                this.esi.getCharacterShip(user.val() as Character)
+                esi.getCharacterLocation(user.val() as Character),
+                esi.getCharacterShip(user.val() as Character)
             ]);
         })
     }
 
 
-    public processDetails = (results: (Location | Ship | ErrorResponse)[], current): Promise<Reference[] | ErrorResponse> => {
+    private processDetails = (results: (Location | Ship | ErrorResponse)[], current): Promise<Reference[] | ErrorResponse> => {
         let ids = [];
 
         for (let result of results) {
@@ -169,10 +167,10 @@ export default class Locations {
             }
         };
 
-        return ids.length > 0 ? this.esi.getNames(ids) : null;
+        return ids.length > 0 ? esi.getNames(ids) : null;
     }
 
-    public pushChanges = async (names, current): Promise<any> => {
+    private pushChanges = async (names, current): Promise<any> => {
         if (!names || 'error' in names) {
             return;
         }
@@ -186,7 +184,7 @@ export default class Locations {
             let details: CharacterLocation | false = current[key];
 
             if (details === false || !details.location || !details.ship) {
-                return this.firebase.ref(`locations/${key}`).remove();
+                return this.database.ref(`locations/${key}`).remove();
             }
 
             if (details.location.system && details.location.system.id) {
@@ -197,7 +195,7 @@ export default class Locations {
                 details.ship.type = names[details.ship.typeId].name;
             }
 
-            return this.firebase.ref(`locations/${key}`).set(details);
+            return this.database.ref(`locations/${key}`).set(details);
         });
     }
 }

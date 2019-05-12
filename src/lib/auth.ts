@@ -13,7 +13,7 @@ const headers = {
 
 export default class Authenticator {
 
-    constructor(private firebase: database.Database) { }
+    private database = firebase.database();
 
     private async manageTokenRefreshErrors(user: database.DataSnapshot, response: Response): Promise<any> {
         let content: any;
@@ -42,7 +42,7 @@ export default class Authenticator {
             user.child('roles').ref.remove();
             user.child('titles').ref.remove();
 
-            this.firebase.ref(`users/${user.child('accountId').val()}/errors`).set(true);
+            this.database.ref(`users/${user.child('accountId').val()}/errors`).set(true);
             logger.log(Severity.NOTICE, {}, `Invalid user token, ${user.child('name').val()} has been removed.`);
         }
 

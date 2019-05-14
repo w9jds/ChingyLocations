@@ -1,9 +1,7 @@
-import * as bluebird from 'bluebird';
 import { database } from 'firebase-admin';
-
+import { Severity, Character, ErrorResponse, Ship, Location, Permissions, Reference } from 'node-esi-stackdriver';
 import Authentication from './auth';
-import { Severity, Character, ErrorResponse, Reference, Online, Ship, Location } from 'node-esi-stackdriver';
-import { CharacterLocation } from '../models/Locations';
+import { map } from 'bluebird';
 
 export default class Locations {
 
@@ -18,7 +16,7 @@ export default class Locations {
         this.database.ref(`characters`).on('child_removed', this.removeUser);
     }
 
-    public getLastRun = (): number => this.lastRun;
+    // public getLastRun = (): number => this.lastRun;
 
     private setUser = (snapshot: database.DataSnapshot) => {
         let character = snapshot.val();
@@ -40,162 +38,152 @@ export default class Locations {
         this.users.delete(snapshot.key);
     }
 
-    private trigger = async () => {
-        let current = {};
-        const users = await this.validateUsers();
-        const status = await this.getCharacterStatuses(users);
-        const details = await this.getCharacterDetails(status, current);
-        const names = await this.processDetails(details, current);
-        
-        return this.pushChanges(names, current);
-    }
-
-    private sleep = (ms: number): Promise<void> => new Promise(resolve => {
-        setTimeout(resolve, ms)
+    private sleep = (seconds: number): Promise<void> => new Promise(resolve => {
+        setTimeout(resolve, seconds * 1000)
     })
 
     public start = async () => {
         for (;;) {
+            if (this.lastRun) {
+                console.info(`last run at ${new Date(this.lastRun)} about ${(Date.now() - this.lastRun) / 1000} seconds ago.`);
+            }
+
             try {
                 this.lastRun = Date.now();
                 let response = await esi.status();
 
                 if (this.users.size < 1) {
-                    await this.sleep(6000);
+                    await this.sleep(6);
                 }
                 else if ('players' in response) {
-                    await this.trigger();
+                    await this.processUsers();
                 }
                 else {
                     logger.log(Severity.INFO, {}, 'ESI is offline, waiting 35 seconds to check again');
-                    await this.sleep(35000);
+                    await this.sleep(35);
                 }
             }
             catch (error) {
                 logger.log(Severity.ERROR, {}, error);
                 console.info("Location service encountered an error, waiting 15 seconds before running next instance")
-                await this.sleep(15000);
+                await this.sleep(15);
             }
         }
     }
 
-    private validateUsers = (): bluebird<any[]> => bluebird.map(this.users, user => this.auth.validate(user[1]))
+    private processUsers = async () => {
+        await map(this.users, user => this.processUser(user[1]), { concurrency: 500 });
+    }
     
-    private getCharacterStatuses = (characters: Character[]): bluebird<any[]> => {
-        const filter = characters.filter((character: Character) => {
-            if (!character || !character.id) return false;
-            if (!character.sso) return false;
-            if (character.sso.scope.indexOf('read_location') < 0) return false;
-            if (character.sso.scope.indexOf('read_ship_type') < 0) return false;
-            return true;
-        });
+    private processUser = (user: database.DataSnapshot) => new Promise(async (resolve, reject) => {
+        const login = await this.auth.validate(user);
+    
+        if ('error' in login) {
+            resolve();
+        }
+        else if ('id' in login && login.sso && this.hasLocationScopes(login.sso)) {
+            await this.processOnlineCharacter(login);
+            resolve();
+        }
+        else {
+            resolve();
+        }
+    });
 
-        return bluebird.map(filter, character => {
-            return esi.getCharacterOnline(character)
-        });
-    }
-
-    private getCharacterDetails = (results, current): bluebird<any[]> => {
-        const online: Online[] = results.filter((result: Online | ErrorResponse) => {
-            if ('error' in result) {
-                return false;
-            }
-
-            if (result.online === true) {
-                return true;
-            }
-             
-            current[result.id] = false;
+    private hasLocationScopes = (permissions: Permissions): boolean => {
+        if (permissions.scope.indexOf('read_location') < 0) {
             return false;
-        });
+        }
+        if (permissions.scope.indexOf('read_ship_type') < 0) {
+            return false;
+        }
+        if (permissions.scope.indexOf('read_online') < 0) {
+            return false;
+        }
 
-        return bluebird.map(online, (status: Online) => {
-            const user: database.DataSnapshot = this.users.get(status.id.toString());
-
-            return Promise.all([
-                esi.getCharacterLocation(user.val() as Character),
-                esi.getCharacterShip(user.val() as Character)
-            ]);
-        })
+        return true;
     }
 
+    private processOnlineCharacter = async (character: Character): Promise<void> => {
+        const online = await esi.getCharacterOnline(character);
 
-    private processDetails = (results: (Location | Ship | ErrorResponse)[], current): Promise<Reference[] | ErrorResponse> => {
-        let ids = [];
-
-        for (let result of results) {
-            const characterId: number = result[0].id || result[1].id || null;
-            if (characterId) {
-                const ship: Ship | ErrorResponse = result[1];
-                const location: Location | ErrorResponse = result[0];
-                const user: database.DataSnapshot = this.users.get(characterId.toString());
-                
-                if ('error' in location) {
-                    console.log(JSON.stringify(location));
-                    continue;
-                }
-                
-                if ('error' in ship) {
-                    console.log(JSON.stringify(ship));
-                    continue;
-                }
-
-                if (ids.indexOf(location.solar_system_id) < 0) {
-                    ids.push(location.solar_system_id);
-                }
-
-                if (ids.indexOf(ship.ship_type_id) < 0) {
-                    ids.push(ship.ship_type_id);
-                }
-
-                current[user.key] = {
-                    id: Number(user.key),
-                    name: user.child('name').val(),
-                    corpId: user.child('corpId').val(),
-                    allianceId: user.hasChild('allianceId') ? user.child('allianceId').val() : null,
-                    ship: {
-                        typeId: ship.ship_type_id,
-                        name: ship.ship_name,
-                        itemId: ship.ship_item_id
-                    },
-                    location: {
-                        system: {
-                            id: location.solar_system_id
-                        }
-                    }
-                };
-            }
-        };
-
-        return ids.length > 0 ? esi.getNames(ids) : null;
-    }
-
-    private pushChanges = async (names, current): Promise<any> => {
-        if (!names || 'error' in names) {
+        if ('error' in online || online.online === false) {
+            this.database.ref(`locations/${character.id}`).remove();
             return;
         }
-        
-        names = names.reduce((end, item) => {
+
+        if (online.online === true) {
+            const results = await Promise.all([
+                esi.getCharacterLocation(character), 
+                esi.getCharacterShip(character)
+            ]);
+
+            return await this.setCharacterLocation(character, results);
+        }
+    }
+
+    private getNames = async (location: Location, ship: Ship): Promise<Record<string, Reference>> => {
+        const responses = await esi.getNames([location.solar_system_id, ship.ship_type_id]);
+
+        if ('error' in responses) {
+            console.log(JSON.stringify(responses));
+            return;
+        }
+
+        return responses.reduce((end, item) => {
             end[item.id] = item;
             return end;
         }, {});
-
-        return bluebird.map(Object.keys(current), (key: string) => {
-            let details: CharacterLocation | false = current[key];
-
-            if (details === false || !details.location || !details.ship) {
-                return this.database.ref(`locations/${key}`).remove();
-            }
-
-            if (details.location.system && details.location.system.id) {
-                details.location.system.name = names[details.location.system.id].name;
-            }
-
-            if (details.ship && details.ship.typeId) {
-                details.ship.type = names[details.ship.typeId].name;
-            }
-
-            return this.database.ref(`locations/${key}`).set(details);
-        });
     }
+
+    private setCharacterLocation = async (character: Character, results: (Location | Ship | ErrorResponse)[]): Promise<void> => {
+        let ship: Ship;
+        let location: Location;
+    
+        for (let result of results) {
+            if ('error' in result) {
+                console.log(JSON.stringify(location));
+                continue;
+            }
+
+            if ('solar_system_id' in result) {
+                location = result;
+                continue;
+            }
+
+            if ('ship_type_id' in result) {
+                ship = result;
+                continue;
+            }
+        }
+
+        if (!ship || !location) {
+            this.database.ref(`locations/${character.id}`).remove();
+            return;
+        }
+
+        const names = await this.getNames(location, ship);
+
+        if (names && location && ship) {
+            await this.database.ref(`locations/${character.id}`).update({
+                id: character.id,
+                name: character.name,
+                corpId: character.corpId,
+                allianceId: character.allianceId ? character.allianceId : null,
+                ship: {
+                    typeId: ship.ship_type_id,
+                    name: ship.ship_name,
+                    itemId: ship.ship_item_id,
+                    type: names[ship.ship_type_id].name
+                },
+                location: {
+                    system: {
+                        id: location.solar_system_id,
+                        name: names[location.solar_system_id].name
+                    }
+                }
+            });
+        }
+    }
+
 }

@@ -49,7 +49,7 @@ export default class Authenticator {
         return payload;
     }
 
-    public validate = async (user: database.DataSnapshot): Promise<any> => {
+    public validate = async (user: database.DataSnapshot): Promise<Character | UserError> => {
         let character: Character = user.val();
         const base: UserError = {
             error: true,

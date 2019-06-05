@@ -2,7 +2,7 @@ import * as admin from 'firebase-admin';
 import * as cert from './config/new-eden-admin.json';
 
 import Locations from './lib/locations';
-import { Logger, Esi, Severity } from 'node-esi-stackdriver';
+import { Logger, Esi } from 'node-esi-stackdriver';
 import { UserAgent, ProjectId } from './config/constants.js';
 
 global.esi = new Esi(UserAgent, { projectId: ProjectId });

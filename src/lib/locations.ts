@@ -168,7 +168,7 @@ export default class Locations {
             await this.database.ref(`locations/${character.id}`).update({
                 id: character.id,
                 name: character.name,
-                corpId: character.corpId,
+                corpId: character.corpId ? character.corpId : null,
                 allianceId: character.allianceId ? character.allianceId : null,
                 ship: {
                     typeId: ship.ship_type_id,
@@ -182,6 +182,8 @@ export default class Locations {
                         name: names[location.solar_system_id].name
                     }
                 }
+            }).catch(error => {
+                console.error(`Update of locations failed: ${error}`);
             });
         }
     }

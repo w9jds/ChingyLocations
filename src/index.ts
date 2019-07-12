@@ -1,9 +1,9 @@
 import * as admin from 'firebase-admin';
 import * as cert from './config/new-eden-admin.json';
 
-import Locations from './lib/locations';
 import { Logger, Esi } from 'node-esi-stackdriver';
 import { UserAgent, ProjectId } from './config/constants.js';
+import Master from './master.js';
 
 global.esi = new Esi(UserAgent, { projectId: ProjectId });
 global.logger = new Logger('locations', { projectId: ProjectId });
@@ -12,12 +12,20 @@ global.firebase = admin.initializeApp({
     databaseURL: 'https://new-eden-storage-a5c23.firebaseio.com'
 });
 
-const locations = new Locations();
+const master = new Master();
 
-try {
-    locations.start();
+process.on('uncaughtException', e => {
+    console.error(e);
+    process.exit(2);
+});
+
+process.on('unhandledRejection', e => {
+    console.error(e);
+    process.exit(2);
+});
+
+const init = () => {
+    master.startWorkers(init);
 }
-catch(error) {
-    console.error(error);
-    locations.start();
-}
+
+init();

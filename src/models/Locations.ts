@@ -1,4 +1,3 @@
-
 export type CharacterLocation = {
     id: number;
     name: string;

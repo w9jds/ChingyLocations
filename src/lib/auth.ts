@@ -1,9 +1,9 @@
 import * as moment from 'moment';
-import { database } from 'firebase-admin';
 import fetch, {Response} from 'node-fetch';
 
 import { UserAgent, EveClientId, EveSecret } from '../config/constants';
-import { Logger, Severity, Permissions, Character, Esi } from 'node-esi-stackdriver';
+import { Logger, Severity, Permissions } from 'node-esi-stackdriver';
+import { CharacterBase } from '../locations';
 
 const logger = new Logger('esi', { projectId: 'new-eden-storage-a5c23' });
 const headers = {
@@ -15,13 +15,13 @@ export default class Authenticator {
 
     private database = firebase.database();
 
-    private async manageTokenRefreshErrors(user: database.DataSnapshot, response: Response): Promise<any> {
+    private async manageTokenRefreshErrors(user: CharacterBase, response: Response): Promise<any> {
         let content: any;
         let payload = {
             error: true,
             user: {
-                id: user.key,
-                name: user.child('name').val()
+                id: user.id,
+                name: user.name
             }
         };
 
@@ -35,39 +35,39 @@ export default class Authenticator {
         }
         
         if (content && content.error && (content.error == 'invalid_grant' || content.error == 'invalid_token')) {
-            let scopes = user.child('sso/scope').val();
-            user.ref.update({ expired_scopes: scopes });
+            let userRef = this.database.ref(`characters/${user.id}`);
 
-            user.child('sso').ref.remove();
-            user.child('roles').ref.remove();
-            user.child('titles').ref.remove();
+            userRef.update({ expired_scopes: user.sso.scope });
 
-            this.database.ref(`users/${user.child('accountId').val()}/errors`).set(true);
-            logger.log(Severity.NOTICE, {}, `Invalid user token, ${user.child('name').val()} has been removed.`);
+            userRef.child('sso').ref.remove();
+            userRef.child('roles').ref.remove();
+            userRef.child('titles').ref.remove();
+
+            this.database.ref(`users/${user.accountId}/errors`).set(true);
+            logger.log(Severity.NOTICE, {}, `Invalid user token, ${user.name} has been removed.`);
         }
 
         return payload;
     }
 
-    public validate = async (user: database.DataSnapshot): Promise<Character | UserError> => {
-        let character: Character = user.val();
+    public validate = async (user: CharacterBase): Promise<CharacterBase | UserError> => {
         const base: UserError = {
             error: true,
             user: {
-                id: user.key,
-                name: user.child('name').val()
+                id: user.id,
+                name: user.name
             }
         };
 
-        if (!character.sso) {
+        if (!user.sso) {
             base.content = 'character not logged in';
             return base;
         }
 
         try {
-            const expiresAt = moment(character.sso.expiresAt);
+            const expiresAt = moment(user.sso.expiresAt);
             if (moment().isAfter(expiresAt)) {
-                const response = await this.refresh(character.sso.refreshToken);
+                const response = await this.refresh(user.sso.refreshToken);
 
                 if (response.status == 200) {
                     const tokens = await response.json();
@@ -78,19 +78,19 @@ export default class Authenticator {
                         expiresAt: moment().add((tokens.expires_in - 60), 'seconds').valueOf()
                     }
 
-                    character.sso.accessToken = tokens.access_token;
+                    user.sso.accessToken = tokens.access_token;
                     Promise.all([
-                        user.child('sso').ref.update(update),
-                        user.ref.update({
+                        this.database.ref(`characters/${user.id}/sso`).update(update),
+                        this.database.ref(`characters/${user.id}`).update({
                             name: verify.CharacterName,
                             hash: verify.CharacterOwnerHash
                         })
                     ]);
-                    return character;
+                    return user;
                 }
                 return this.manageTokenRefreshErrors(user, response);
             }
-            return character;
+            return user;
         }
         catch(error) {
             base.error = error;

@@ -2,7 +2,7 @@ type UserError = {
     error: boolean;
     content?: any;
     user: {
-        id: string;
+        id: string | number;
         name: string;
     }
 }

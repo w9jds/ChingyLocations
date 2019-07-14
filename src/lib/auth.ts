@@ -4,6 +4,7 @@ import fetch, {Response} from 'node-fetch';
 import { UserAgent, EveClientId, EveSecret } from '../config/constants';
 import { Logger, Severity, Permissions } from 'node-esi-stackdriver';
 import { CharacterBase } from '../locations';
+import { UserError } from '../models/Errors';
 
 const logger = new Logger('esi', { projectId: 'new-eden-storage-a5c23' });
 const headers = {

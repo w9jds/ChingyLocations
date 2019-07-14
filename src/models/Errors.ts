@@ -1,4 +1,4 @@
-type UserError = {
+export type UserError = {
     error: boolean;
     content?: any;
     user: {

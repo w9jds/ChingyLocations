@@ -25,7 +25,7 @@ process.on('unhandledRejection', e => {
 });
 
 const init = () => {
-    master.startWorkers(init);
+    master.startNewWorkers();
 }
 
 init();

@@ -5,13 +5,14 @@ import Authentication from './lib/auth';
 import { UserAgent, ProjectId } from './config/constants.js';
 import { 
     Esi, Character, ErrorResponse, Ship, 
-    Location, Permissions, Reference 
+    Location, Permissions, Reference, Logger, Severity 
 } from 'node-esi-stackdriver';
 
 export type CharacterBase = Pick<Character, "id" | "name" | "accountId" | "corpId" | "allianceId" | "sso">;
 console.log(`Starting child process ${process.pid}`)
 
 global.esi = new Esi(UserAgent, { projectId: ProjectId });
+global.logger = new Logger('locations', { projectId: ProjectId });
 global.firebase = admin.initializeApp({
     credential: admin.credential.cert(cert as admin.ServiceAccount),
     databaseURL: 'https://new-eden-storage-a5c23.firebaseio.com'
@@ -21,32 +22,33 @@ const auth = new Authentication();
 const database = firebase.database();
 
 process.on('uncaughtException', e => {
-    console.error(e);
+    logger.log(Severity.ERROR, {}, e);
     process.exit(2);
 });
 
 process.on('unhandledRejection', e => {
-    console.error(e);
+    logger.log(Severity.ERROR, {}, e);
     process.exit(2);
 });
 
 process.on('message', async users => {
-    console.log(`message recieved, working on ${users.length} characters.`)
     const response = await esi.status();
     
     try {
         if (users.size < 1) {
-            process.exit(0);
+            process.send({ error: true, backoff: 6 })
         }
         else if ('players' in response) {
             await Promise.all( users.map(user => processUser(user)) );
-            process.exit(0);
+            process.send({ error: false, backoff: 0})
         }
         else {
-            process.exit(1);
+            logger.log(Severity.INFO, {}, 'ESI is offline, waiting 35 seconds to check again');
+            process.send({ error: true, backoff: 35 })
         }
     } catch(error) {
-        process.exit(1);
+        logger.log(Severity.ERROR, {}, error);
+        process.send({ error: true, backoff: 16 })
     }
 })
 

@@ -33,7 +33,7 @@ export default class Authenticator {
         catch (error) {
             payload['response'] = error;
         }
-        
+
         if (content && content.error && (content.error == 'invalid_grant' || content.error == 'invalid_token')) {
             let scopes = user.child('sso/scope').val();
             user.ref.update({ expired_scopes: scopes });
@@ -60,41 +60,44 @@ export default class Authenticator {
         };
 
         if (!character.sso) {
-            base.content = 'character not logged in';
-            return base;
+          return {
+            ...base,
+            content: 'character not logged in'
+          };
         }
 
         try {
-            const expiresAt = moment(character.sso.expiresAt);
-            if (moment().isAfter(expiresAt)) {
-                const response = await this.refresh(character.sso.refreshToken);
+          const expiresAt = moment(character.sso.expiresAt);
+          if (moment().isAfter(expiresAt)) {
+            const response = await this.refresh(character.sso.refreshToken);
 
-                if (response.status == 200) {
-                    const tokens = await response.json();
-                    const verify = await this.verify(tokens.token_type, tokens.access_token);
-                    let update: Permissions = {
-                        accessToken: tokens.access_token,
-                        refreshToken: tokens.refresh_token,
-                        expiresAt: moment().add((tokens.expires_in - 60), 'seconds').valueOf()
-                    }
+            if (response.status == 200) {
+              const tokens = await response.json();
+              const verify = await this.verify(tokens.token_type, tokens.access_token);
 
-                    character.sso.accessToken = tokens.access_token;
-                    Promise.all([
-                        user.child('sso').ref.update(update),
-                        user.ref.update({
-                            name: verify.CharacterName,
-                            hash: verify.CharacterOwnerHash
-                        })
-                    ]);
-                    return character;
-                }
-                return this.manageTokenRefreshErrors(user, response);
+              let update: Permissions = {
+                accessToken: tokens.access_token,
+                refreshToken: tokens.refresh_token,
+                expiresAt: moment().add((tokens.expires_in - 60), 'seconds').valueOf()
+              }
+
+              character.sso.accessToken = tokens.access_token;
+              user.ref.update({
+                name: verify.CharacterName,
+                hash: verify.CharacterOwnerHash,
+                sso: update
+              });
+
+              return character;
             }
-            return character;
+
+            return this.manageTokenRefreshErrors(user, response);
+          }
+          return character;
         }
         catch(error) {
-            base.error = error;
-            return base;
+          base.error = error;
+          return base;
         }
     }
 
@@ -116,7 +119,7 @@ export default class Authenticator {
         }
     }
 
-    private refresh = (refreshToken: string): Promise<any> => 
+    private refresh = (refreshToken: string): Promise<any> =>
         fetch('https://login.eveonline.com/oauth/token', {
             method: 'POST',
             headers: {

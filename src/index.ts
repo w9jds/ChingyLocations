@@ -2,7 +2,7 @@ import * as admin from 'firebase-admin';
 import * as cert from './config/new-eden-admin.json';
 
 import Locations from './lib/locations';
-import { Logger, Esi } from 'node-esi-stackdriver';
+import { Logger, Esi, Severity } from 'node-esi-stackdriver';
 import { UserAgent, ProjectId } from './config/constants.js';
 
 global.esi = new Esi(UserAgent, { projectId: ProjectId });
@@ -13,6 +13,16 @@ global.firebase = admin.initializeApp({
 });
 
 const locations = new Locations();
+
+process.on('uncaughtException', e => {
+    logger.log(Severity.ERROR, {}, e);
+    process.exit(2);
+});
+
+process.on('unhandledRejection', e => {
+    logger.log(Severity.ERROR, {}, e);
+    process.exit(2);
+});
 
 try {
     locations.start();

@@ -1,5 +1,5 @@
 import * as admin from 'firebase-admin';
-import * as cert from './config/new-eden-admin.json';
+import * as cert from './config/neweden-admin.json';
 
 import Locations from './lib/locations';
 import { Logger, Esi, Severity } from 'node-esi-stackdriver';

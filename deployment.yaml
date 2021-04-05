@@ -1,4 +1,4 @@
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
@@ -6,21 +6,25 @@ metadata:
   name: locations
   namespace: services
 spec:
-  selector:
-    matchLabels:
-      run: locations
+  replicas: 1
   strategy:
     rollingUpdate:
       maxSurge: 1
       maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: locations
   template:
     metadata:
       labels:
-        run: locations
+        app: locations
     spec:
       containers:
       - name: locations
-        image: us.gcr.io/new-eden-storage-a5c23/chingy-locations:v1.16
-        ports:
-        - containerPort: 8000
-          protocol: TCP
+        image: us.gcr.io/new-eden-storage-a5c23/chingy-locations:v1.45
+        env:
+          - name: EVE_CLIENT_ID
+            value: "e996e0b1bc8049368ce06873775cb4f1"
+          - name: EVE_SECRET
+            value: "W6JrAgvpgQGt3hWOs0sPdIm8idv6Ade3UWSwzSAO"
+
